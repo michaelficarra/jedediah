@@ -11,8 +11,10 @@
     "url": "git@github.com:michaelficarra/jedediah.git"
   },
   "devDependencies": {
-    "coffee-script-redux": "~2.0.0",
-    "mocha": "~1.8.1"
+    "coffee-script-redux": "2.0.0-beta5",
+    "mocha": "~1.8.1",
+    "scopedfs": "0.1.x",
+    "semver": "~1.1.4"
   },
   "author": "michaelficarra",
   "license": "BSD"
