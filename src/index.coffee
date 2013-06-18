@@ -15,10 +15,21 @@ formatOptions = (opts) ->
   opts.sort (a, b) -> a.length - b.length
   opts.join ', '
 
+addAliases = (name, aliases, aliasMap, shortList, longList) ->
+  for alias in [name, aliases...]
+    aliasMap[alias] = name
+    if alias.length is 1 then shortList.push alias
+    else if alias.length > 1 then longList.push alias
+
+
 class Option
   constructor: (@name, @aliases, @default, @description) ->
 class Parameter
   constructor: (@name, @aliases, @placeholder, @description) ->
+  default: -> null
+class ListParameter
+  constructor: (@name, @aliases, @placeholder, @description) ->
+  default: -> []
 
 
 module.exports = class Jedediah
@@ -36,21 +47,24 @@ module.exports = class Jedediah
     @longParameterArguments = []
 
   addOption: (name, aliases..., default_, description) ->
-    @options[name] = new Option name, aliases, default_, description
-    for alias in [name, aliases...]
-      @aliasMap[alias] = name
-      if alias.length is 1 then @shortOptionArguments.push alias
-      else if alias.length > 1 then @longOptionArguments.push alias
+    @options[name] = new Option name, aliases, (-> default_), description
+    addAliases name, aliases, @aliasMap, @shortOptionArguments, @longOptionArguments
 
   addParameter: (name, aliases..., placeholder, description) ->
     @parameters[name] = new Parameter name, aliases, placeholder, description
-    for alias in [name, aliases...]
-      @aliasMap[alias] = name
-      if alias.length is 1 then @shortParameterArguments.push alias
-      else if alias.length > 1 then @longParameterArguments.push alias
+    addAliases name, aliases, @aliasMap, @shortParameterArguments, @longParameterArguments
+
+  addListParameter: (name, aliases..., placeholder, description) ->
+    @parameters[name] = new ListParameter name, aliases, placeholder, description
+    addAliases name, aliases, @aliasMap, @shortParameterArguments, @longParameterArguments
+
+  addAlias: -> # TODO
 
   getDefaults: ->
-    new -> @[k] = o.default for own k, o of @options; this
+    obj = {}
+    obj[k] = o.default() for own k, o of @options
+    obj[k] = o.default() for own k, o of @parameters
+    obj
 
   parse: (argv) ->
     # clone args
@@ -76,7 +90,7 @@ module.exports = class Jedediah
     positionalArgs = []
     while args.length
       arg = args.shift()
-      if reShortOptionsShortParameter.exec arg
+      if @shortParameterArguments.length and reShortOptionsShortParameter.exec arg
         args.unshift "-#{arg[1...-1]}", "-#{arg[-1..]}"
       else if reShortOptions.exec arg
         for o in arg[1..].split ''
@@ -84,7 +98,10 @@ module.exports = class Jedediah
       else if match = reLongOption.exec arg
         options[@aliasMap[match[2]]] = if match[1]? then off else on
       else if match = (reShortParameter.exec arg) ? reLongParameter.exec arg
-        options[@aliasMap[match[1]]] = args.shift()
+        if @parameters[@aliasMap[match[1]]] instanceof ListParameter
+          options[@aliasMap[match[1]]].push args.shift()
+        else
+          options[@aliasMap[match[1]]] = args.shift()
       else if match = /^(-.|--.*)$/.exec arg
         throw new Error "Unrecognised option '#{match[0].replace /'/g, '\\\''}'"
       else
